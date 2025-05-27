@@ -5,7 +5,8 @@ import {
   signOut
 } from 'firebase/auth'
 import {
-  doc, getDoc, setDoc, collection, addDoc, getDocs, serverTimestamp, Timestamp
+  doc, getDoc, setDoc, collection,
+  addDoc, getDocs, updateDoc, serverTimestamp, Timestamp
 } from 'firebase/firestore'
 import Login from './Login'
 
@@ -16,6 +17,8 @@ export default function App() {
   const [history, setHistory] = useState([])
   const [successMsg, setSuccessMsg] = useState("")
   const [customDate, setCustomDate] = useState("")
+  const [editMode, setEditMode] = useState({}) // { entryId: true/false }
+  const [editData, setEditData] = useState({}) // { entryId: { date, amount } }
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => {
@@ -41,7 +44,10 @@ export default function App() {
   async function loadHistory(uid) {
     const ref = collection(db, "users", uid, "maasserHistory")
     const snap = await getDocs(ref)
-    const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    const data = snap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }))
     setHistory(data.sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0)))
   }
 
@@ -51,7 +57,6 @@ export default function App() {
     await setDoc(ref, { fields, rate })
 
     const calcAmount = calculateMaasser()
-
     const historyRef = collection(db, "users", user.uid, "maasserHistory")
     await addDoc(historyRef, {
       date: serverTimestamp(),
@@ -59,21 +64,63 @@ export default function App() {
       details: fields
     })
 
-    setSuccessMsg("✅ Données sauvegardées !")
+    setSuccessMsg("✅ Données et historique enregistrés")
     setTimeout(() => setSuccessMsg(""), 3000)
     loadHistory(user.uid)
   }
 
   async function markAsPaid() {
-    if (!user || !customDate) return
+    if (!user || !customDate) {
+      setSuccessMsg("❌ Veuillez choisir une date")
+      setTimeout(() => setSuccessMsg(""), 3000)
+      return
+    }
+
     const historyRef = collection(db, "users", user.uid, "maasserHistory")
     await addDoc(historyRef, {
       date: Timestamp.fromDate(new Date(customDate)),
       amount: calculateMaasser(),
       details: fields
     })
+
+    setSuccessMsg("✅ Paiement enregistré avec succès !")
     setCustomDate("")
-    setSuccessMsg("✅ Paiement enregistré !")
+    setTimeout(() => setSuccessMsg(""), 3000)
+    loadHistory(user.uid)
+  }
+
+  const handleEdit = (entry) => {
+    setEditMode({ ...editMode, [entry.id]: true })
+    setEditData({
+      ...editData,
+      [entry.id]: {
+        amount: entry.amount,
+        date: entry.date?.seconds
+          ? new Date(entry.date.seconds * 1000).toISOString().substring(0, 10)
+          : ""
+      }
+    })
+  }
+
+  const handleEditChange = (entryId, key, value) => {
+    setEditData({
+      ...editData,
+      [entryId]: {
+        ...editData[entryId],
+        [key]: value
+      }
+    })
+  }
+
+  const validateEdit = async (entryId) => {
+    const ref = doc(db, "users", user.uid, "maasserHistory", entryId)
+    const { amount, date } = editData[entryId]
+    await updateDoc(ref, {
+      amount: parseFloat(amount),
+      date: Timestamp.fromDate(new Date(date))
+    })
+    setSuccessMsg("✅ Modifications enregistrées")
+    setEditMode({ ...editMode, [entryId]: false })
     setTimeout(() => setSuccessMsg(""), 3000)
     loadHistory(user.uid)
   }
@@ -150,8 +197,6 @@ export default function App() {
       <br /><br />
       <button onClick={saveUserData}>💾 Enregistrer mes données</button>
 
-      {successMsg && <p style={{ color: "green" }}>{successMsg}</p>}
-
       <h3>📊 Maasser à donner : {calculateMaasser()} €</h3>
 
       <hr />
@@ -163,14 +208,41 @@ export default function App() {
       />
       <button onClick={markAsPaid} style={{ marginLeft: "1rem" }}>📅 Valider ce paiement</button>
 
+      {successMsg && <p style={{ color: "green", fontWeight: "bold" }}>{successMsg}</p>}
+
       <hr />
       <h2>🕓 Historique des calculs</h2>
       <ul>
+        {history.length === 0 && <li>Aucun historique pour l’instant.</li>}
         {history.map((entry, i) => (
-          <li key={entry.id || i}>
-            {entry.date?.seconds
-              ? new Date(entry.date.seconds * 1000).toLocaleDateString()
-              : "⏳"} — {entry.amount} €
+          <li key={entry.id || i} style={{ marginBottom: "1rem" }}>
+            {editMode[entry.id] ? (
+              <div>
+                📅 <input
+                  type="date"
+                  value={editData[entry.id]?.date}
+                  onChange={e => handleEditChange(entry.id, "date", e.target.value)}
+                /> — 💶
+                <input
+                  type="number"
+                  value={editData[entry.id]?.amount}
+                  onChange={e => handleEditChange(entry.id, "amount", e.target.value)}
+                  style={{ width: "100px", marginLeft: "1rem" }}
+                />
+                <button onClick={() => validateEdit(entry.id)} style={{ marginLeft: "1rem" }}>
+                  💾 Valider les modifs
+                </button>
+              </div>
+            ) : (
+              <div>
+                📅 {entry.date?.seconds
+                  ? new Date(entry.date.seconds * 1000).toLocaleDateString()
+                  : "⏳"} — 💶 {entry.amount} €
+                <button onClick={() => handleEdit(entry)} style={{ marginLeft: "1rem" }}>
+                  ✏️ Modifier
+                </button>
+              </div>
+            )}
           </li>
         ))}
       </ul>

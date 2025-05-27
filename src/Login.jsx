@@ -2,14 +2,13 @@ import { useState } from 'react'
 import { auth } from './firebase'
 import {
   createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut
+  signInWithEmailAndPassword
 } from 'firebase/auth'
 
 export default function Login({ onUser }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [mode, setMode] = useState("login") // or 'register'
+  const [mode, setMode] = useState("login")
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -52,3 +51,7 @@ export default function Login({ onUser }) {
       <button onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
         {mode === 'login' ? "Créer un compte" : "Déjà inscrit ? Se connecter"}
       </button>
+    </div>
+  )
+}
+

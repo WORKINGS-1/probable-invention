@@ -58,17 +58,17 @@ export default function App() {
 
   async function saveUserData() {
     if (!user) return
+
     await setDoc(doc(db, "users", user.uid), { fields, rate })
 
-    const calcAmount = calculateMaasser()
     await addDoc(collection(db, "users", user.uid, "maasserHistory"), {
       date: serverTimestamp(),
-      amount: calcAmount,
+      amount: calculateMaasser(),
       details: fields
     })
 
     await loadHistory(user.uid)
-    showMessage("✅ Données sauvegardées avec succès")
+    showMessage("✅ Données enregistrées")
   }
 
   async function markAsPaid() {
@@ -85,7 +85,7 @@ export default function App() {
 
     await loadHistory(user.uid)
     setCustomDate("")
-    showMessage("✅ Paiement enregistré pour ce mois")
+    showMessage("✅ Paiement enregistré")
   }
 
   async function validateEdit(entryId) {
@@ -95,32 +95,32 @@ export default function App() {
       date: Timestamp.fromDate(new Date(date))
     })
 
-    setEditMode({ ...editMode, [entryId]: false })
+    setEditMode(prev => ({ ...prev, [entryId]: false }))
     await loadHistory(user.uid)
     showMessage("✅ Modifications enregistrées")
   }
 
   const handleEdit = (entry) => {
-    setEditMode({ ...editMode, [entry.id]: true })
-    setEditData({
-      ...editData,
+    setEditMode(prev => ({ ...prev, [entry.id]: true }))
+    setEditData(prev => ({
+      ...prev,
       [entry.id]: {
         amount: entry.amount,
         date: entry.date?.seconds
           ? new Date(entry.date.seconds * 1000).toISOString().substring(0, 10)
           : ""
       }
-    })
+    }))
   }
 
   const handleEditChange = (entryId, key, value) => {
-    setEditData({
-      ...editData,
+    setEditData(prev => ({
+      ...prev,
       [entryId]: {
-        ...editData[entryId],
+        ...prev[entryId],
         [key]: value
       }
-    })
+    }))
   }
 
   const addField = () => {
@@ -149,6 +149,21 @@ export default function App() {
 
   return (
     <div style={{ padding: "2rem", fontFamily: "sans-serif", maxWidth: 600, margin: "auto" }}>
+      {successMsg && (
+        <div style={{
+          backgroundColor: "#e6ffe6",
+          border: "1px solid #4caf50",
+          padding: "1rem",
+          borderRadius: "8px",
+          marginBottom: "1rem",
+          textAlign: "center",
+          color: "#2e7d32",
+          fontWeight: "bold"
+        }}>
+          {successMsg}
+        </div>
+      )}
+
       <h1>Bienvenue, {user.email}</h1>
       <button onClick={() => signOut(auth)}>Se déconnecter</button>
       <hr />
@@ -205,8 +220,6 @@ export default function App() {
         onChange={e => setCustomDate(e.target.value)}
       />
       <button onClick={markAsPaid} style={{ marginLeft: "1rem" }}>📅 Valider ce paiement</button>
-
-      {successMsg && <p style={{ color: "green", fontWeight: "bold" }}>{successMsg}</p>}
 
       <hr />
       <h2>🕓 Historique des calculs</h2>

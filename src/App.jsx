@@ -5,7 +5,7 @@ import {
   signOut
 } from 'firebase/auth'
 import {
-  doc, getDoc, setDoc
+  doc, getDoc, setDoc, collection, addDoc, getDocs, serverTimestamp
 } from 'firebase/firestore'
 import Login from './Login'
 
@@ -13,17 +13,19 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [fields, setFields] = useState([])
   const [rate, setRate] = useState(10)
+  const [history, setHistory] = useState([])
 
-  // Auth listener
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => {
       setUser(u)
-      if (u) loadUserData(u.uid)
+      if (u) {
+        loadUserData(u.uid)
+        loadHistory(u.uid)
+      }
     })
     return () => unsub()
   }, [])
 
-  // Charger les données depuis Firestore
   async function loadUserData(uid) {
     const ref = doc(db, "users", uid)
     const snap = await getDoc(ref)
@@ -34,32 +36,45 @@ export default function App() {
     }
   }
 
-  // Enregistrer dans Firestore
+  async function loadHistory(uid) {
+    const ref = collection(db, "users", uid, "maasserHistory")
+    const snap = await getDocs(ref)
+    const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    setHistory(data)
+  }
+
   async function saveUserData() {
     if (!user) return
     const ref = doc(db, "users", user.uid)
     await setDoc(ref, { fields, rate })
+
+    const calcAmount = calculateMaasser()
+
+    const historyRef = collection(db, "users", user.uid, "maasserHistory")
+    await addDoc(historyRef, {
+      date: serverTimestamp(),
+      amount: calcAmount,
+      details: fields
+    })
+
+    loadHistory(user.uid)
   }
 
-  // Ajouter un champ
   const addField = () => {
     setFields([...fields, { name: "", type: "income", amount: 0 }])
   }
 
-  // Modifier un champ
   const updateField = (index, key, value) => {
     const newFields = [...fields]
     newFields[index][key] = key === "amount" ? parseFloat(value) || 0 : value
     setFields(newFields)
   }
 
-  // Supprimer un champ
   const removeField = (index) => {
     const newFields = fields.filter((_, i) => i !== index)
     setFields(newFields)
   }
 
-  // Calcul Maasser
   const calculateMaasser = () => {
     const income = fields.filter(f => f.type === "income").reduce((sum, f) => sum + f.amount, 0)
     const deductions = fields.filter(f => f.type === "deduction").reduce((sum, f) => sum + f.amount, 0)
@@ -91,7 +106,7 @@ export default function App() {
             style={{ marginRight: "1rem" }}
           >
             <option value="income">Revenu</option>
-            <option value="deduction">Dépense déductible</option>
+            <option value="deduction">Dépense</option>
           </select>
           <input
             type="number"
@@ -118,6 +133,18 @@ export default function App() {
       <button onClick={saveUserData}>💾 Enregistrer mes données</button>
 
       <h3>📊 Maasser à donner : {calculateMaasser()} €</h3>
+
+      <hr />
+      <h2>🕓 Historique des calculs</h2>
+      <ul>
+        {history.map((entry, i) => (
+          <li key={entry.id || i}>
+            {entry.date?.seconds
+              ? new Date(entry.date.seconds * 1000).toLocaleDateString()
+              : "⏳"} — {entry.amount} €
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

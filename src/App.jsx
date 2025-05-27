@@ -17,8 +17,8 @@ export default function App() {
   const [history, setHistory] = useState([])
   const [successMsg, setSuccessMsg] = useState("")
   const [customDate, setCustomDate] = useState("")
-  const [editMode, setEditMode] = useState({}) // { entryId: true/false }
-  const [editData, setEditData] = useState({}) // { entryId: { date, amount } }
+  const [editMode, setEditMode] = useState({})
+  const [editData, setEditData] = useState({})
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => {
@@ -51,42 +51,53 @@ export default function App() {
     setHistory(data.sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0)))
   }
 
+  function showMessage(message) {
+    setSuccessMsg(message)
+    setTimeout(() => setSuccessMsg(""), 3000)
+  }
+
   async function saveUserData() {
     if (!user) return
-    const ref = doc(db, "users", user.uid)
-    await setDoc(ref, { fields, rate })
+    await setDoc(doc(db, "users", user.uid), { fields, rate })
 
     const calcAmount = calculateMaasser()
-    const historyRef = collection(db, "users", user.uid, "maasserHistory")
-    await addDoc(historyRef, {
+    await addDoc(collection(db, "users", user.uid, "maasserHistory"), {
       date: serverTimestamp(),
       amount: calcAmount,
       details: fields
     })
 
-    setSuccessMsg("✅ Données et historique enregistrés")
-    setTimeout(() => setSuccessMsg(""), 3000)
-    loadHistory(user.uid)
+    await loadHistory(user.uid)
+    showMessage("✅ Données sauvegardées avec succès")
   }
 
   async function markAsPaid() {
     if (!user || !customDate) {
-      setSuccessMsg("❌ Veuillez choisir une date")
-      setTimeout(() => setSuccessMsg(""), 3000)
+      showMessage("❌ Choisis une date avant de valider")
       return
     }
 
-    const historyRef = collection(db, "users", user.uid, "maasserHistory")
-    await addDoc(historyRef, {
+    await addDoc(collection(db, "users", user.uid, "maasserHistory"), {
       date: Timestamp.fromDate(new Date(customDate)),
       amount: calculateMaasser(),
       details: fields
     })
 
-    setSuccessMsg("✅ Paiement enregistré avec succès !")
+    await loadHistory(user.uid)
     setCustomDate("")
-    setTimeout(() => setSuccessMsg(""), 3000)
-    loadHistory(user.uid)
+    showMessage("✅ Paiement enregistré pour ce mois")
+  }
+
+  async function validateEdit(entryId) {
+    const { amount, date } = editData[entryId]
+    await updateDoc(doc(db, "users", user.uid, "maasserHistory", entryId), {
+      amount: parseFloat(amount),
+      date: Timestamp.fromDate(new Date(date))
+    })
+
+    setEditMode({ ...editMode, [entryId]: false })
+    await loadHistory(user.uid)
+    showMessage("✅ Modifications enregistrées")
   }
 
   const handleEdit = (entry) => {
@@ -110,19 +121,6 @@ export default function App() {
         [key]: value
       }
     })
-  }
-
-  const validateEdit = async (entryId) => {
-    const ref = doc(db, "users", user.uid, "maasserHistory", entryId)
-    const { amount, date } = editData[entryId]
-    await updateDoc(ref, {
-      amount: parseFloat(amount),
-      date: Timestamp.fromDate(new Date(date))
-    })
-    setSuccessMsg("✅ Modifications enregistrées")
-    setEditMode({ ...editMode, [entryId]: false })
-    setTimeout(() => setSuccessMsg(""), 3000)
-    loadHistory(user.uid)
   }
 
   const addField = () => {

@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react'
 import { auth, db } from './firebase'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { collection, getDocs, addDoc, Timestamp } from 'firebase/firestore'
+import {
+  collection,
+  getDocs,
+  addDoc,
+  Timestamp
+} from 'firebase/firestore'
 import Login from './Login'
 
 export default function App() {
@@ -25,26 +30,39 @@ export default function App() {
   }
 
   async function addTestLine() {
-    if (!user) return
-    const ref = collection(db, "users", user.uid, "maasserHistory")
-    await addDoc(ref, {
-      date: Timestamp.now(),
-      amount: 123.45,
-      details: [{ name: "Salaire", type: "income", amount: 1000 }]
-    })
-    await loadHistory(user.uid)
-    showMessage("✅ Ligne ajoutée à l'historique")
+    if (!user) {
+      showMessage("❌ Non connecté")
+      return
+    }
+
+    // ✅ Afficher immédiatement
+    showMessage("⏳ Envoi en cours...")
+
+    try {
+      const ref = collection(db, "users", user.uid, "maasserHistory")
+      await addDoc(ref, {
+        date: Timestamp.now(),
+        amount: 123.45,
+        details: [{ name: "Salaire", type: "income", amount: 1000 }]
+      })
+
+      showMessage("✅ Ligne ajoutée")
+      await loadHistory(user.uid)
+    } catch (err) {
+      showMessage("❌ Erreur : " + err.message)
+    }
   }
 
   function showMessage(msg) {
     setMessage(msg)
+    // ✨ Ne pas l’effacer tout de suite
     setTimeout(() => setMessage(""), 3000)
   }
 
   if (!user) return <Login onUser={setUser} />
 
   return (
-    <div style={{ padding: "2rem", maxWidth: "600px", margin: "auto", fontFamily: "sans-serif" }}>
+    <div style={{ padding: "2rem", fontFamily: "sans-serif", maxWidth: 600, margin: "auto" }}>
       {message && (
         <div style={{
           backgroundColor: "#e6ffe6",
@@ -64,13 +82,13 @@ export default function App() {
       <button onClick={() => signOut(auth)}>Se déconnecter</button>
 
       <hr />
-      <h2>Test message + ajout historique</h2>
-      <button onClick={addTestLine}>📋 Ajouter ligne test</button>
+      <h2>Test : ajouter ligne d’historique</h2>
+      <button onClick={addTestLine}>📋 Ajouter une ligne test</button>
 
       <hr />
-      <h2>🕓 Historique (lecture seule)</h2>
+      <h2>🕓 Historique</h2>
       <ul>
-        {history.length === 0 && <li>Aucune ligne encore.</li>}
+        {history.length === 0 && <li>Aucun historique pour l’instant.</li>}
         {history.map((entry, i) => (
           <li key={entry.id || i}>
             {entry.date?.seconds

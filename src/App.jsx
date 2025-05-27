@@ -5,7 +5,7 @@ import {
   signOut
 } from 'firebase/auth'
 import {
-  doc, getDoc, setDoc, collection, addDoc, getDocs, serverTimestamp
+  doc, getDoc, setDoc, collection, addDoc, getDocs, serverTimestamp, Timestamp
 } from 'firebase/firestore'
 import Login from './Login'
 
@@ -14,6 +14,8 @@ export default function App() {
   const [fields, setFields] = useState([])
   const [rate, setRate] = useState(10)
   const [history, setHistory] = useState([])
+  const [successMsg, setSuccessMsg] = useState("")
+  const [customDate, setCustomDate] = useState("")
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => {
@@ -40,7 +42,7 @@ export default function App() {
     const ref = collection(db, "users", uid, "maasserHistory")
     const snap = await getDocs(ref)
     const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-    setHistory(data)
+    setHistory(data.sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0)))
   }
 
   async function saveUserData() {
@@ -57,6 +59,22 @@ export default function App() {
       details: fields
     })
 
+    setSuccessMsg("✅ Données sauvegardées !")
+    setTimeout(() => setSuccessMsg(""), 3000)
+    loadHistory(user.uid)
+  }
+
+  async function markAsPaid() {
+    if (!user || !customDate) return
+    const historyRef = collection(db, "users", user.uid, "maasserHistory")
+    await addDoc(historyRef, {
+      date: Timestamp.fromDate(new Date(customDate)),
+      amount: calculateMaasser(),
+      details: fields
+    })
+    setCustomDate("")
+    setSuccessMsg("✅ Paiement enregistré !")
+    setTimeout(() => setSuccessMsg(""), 3000)
     loadHistory(user.uid)
   }
 
@@ -132,7 +150,18 @@ export default function App() {
       <br /><br />
       <button onClick={saveUserData}>💾 Enregistrer mes données</button>
 
+      {successMsg && <p style={{ color: "green" }}>{successMsg}</p>}
+
       <h3>📊 Maasser à donner : {calculateMaasser()} €</h3>
+
+      <hr />
+      <h2>✅ J’ai payé mon Maasser ce mois</h2>
+      <input
+        type="date"
+        value={customDate}
+        onChange={e => setCustomDate(e.target.value)}
+      />
+      <button onClick={markAsPaid} style={{ marginLeft: "1rem" }}>📅 Valider ce paiement</button>
 
       <hr />
       <h2>🕓 Historique des calculs</h2>

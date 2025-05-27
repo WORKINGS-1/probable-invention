@@ -1,40 +1,26 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { auth } from './firebase'
+import { onAuthStateChanged, signOut } from 'firebase/auth'
+import Login from './Login'
 
 function App() {
-  const [income, setIncome] = useState("")
-  const [deduction, setDeduction] = useState("")
-  const [rate, setRate] = useState(10)
+  const [user, setUser] = useState(null)
 
-  const calculate = () => {
-    const incomeVal = parseFloat(income) || 0
-    const deductionVal = parseFloat(deduction) || 0
-    const base = incomeVal - deductionVal
-    return (base * rate / 100).toFixed(2)
-  }
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, user => setUser(user))
+    return () => unsub()
+  }, [])
+
+  if (!user) return <Login onUser={setUser} />
 
   return (
     <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-      <h1>Calculateur de Maasser</h1>
+      <h1>Bienvenue, {user.email}</h1>
+      <button onClick={() => signOut(auth)}>Se déconnecter</button>
+      <hr />
 
-      <label>Revenu net : <br />
-        <input type="number" value={income} onChange={e => setIncome(e.target.value)} />
-      </label>
-      <br /><br />
-
-      <label>Dépenses déductibles : <br />
-        <input type="number" value={deduction} onChange={e => setDeduction(e.target.value)} />
-      </label>
-      <br /><br />
-
-      <label>Pourcentage :
-        <select value={rate} onChange={e => setRate(Number(e.target.value))}>
-          <option value={10}>10% (Maasser)</option>
-          <option value={20}>20% (Chomesh)</option>
-        </select>
-      </label>
-      <br /><br />
-
-      <strong>À donner en Tsedaka : {calculate()} €</strong>
+      {/* Ici on mettra les champs personnalisés plus tard */}
+      <p>Ici viendront vos champs de calcul de Maasser personnalisés</p>
     </div>
   )
 }
